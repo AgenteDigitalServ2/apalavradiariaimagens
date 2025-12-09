@@ -87,6 +87,8 @@ function getGoogleGenAI() {
  * handling markdown blocks or conversational filler text from the model.
  */
 function cleanJsonString(text: string): string {
+  if (!text) return "{}";
+
   // 1. Try to extract from markdown code block
   const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (match) {
@@ -203,17 +205,21 @@ export async function generateRandomVerseSuggestion(): Promise<{ verseText: stri
             systemInstruction: "Você é um assistente especialista em estudos bíblicos. Sempre responda em português do Brasil. Não use nenhum outro idioma.",
             responseMimeType: "application/json",
             responseSchema: singleVerseSuggestionSchema,
-            temperature: 1.5, // Temperatura alta para garantir variedade
+            temperature: 1.1, // Reduced temperature for better JSON stability
           },
         });
     
-        const jsonString = cleanJsonString(response.text);
-        const parsed = JSON.parse(jsonString);
-        
-        if (parsed.verseText && parsed.verseReference) {
-          return parsed;
-        } else {
-          throw new Error("Invalid single verse suggestion structure received from API.");
+        const jsonString = cleanJsonString(response.text || "");
+        try {
+            const parsed = JSON.parse(jsonString);
+            if (parsed.verseText && parsed.verseReference) {
+                return parsed;
+            } else {
+                throw new Error("Invalid single verse suggestion structure received from API.");
+            }
+        } catch (parseError) {
+            console.error("JSON Parse Error:", jsonString, parseError);
+            throw new Error("Falha ao processar a resposta do assistente. Tente novamente.");
         }
       } catch (error) {
         console.error("Error generating random verse suggestion:", error);
@@ -260,16 +266,21 @@ export async function generateVerseSuggestions(
           systemInstruction: "Você é um assistente especialista em estudos bíblicos. Sempre responda em português do Brasil. Não use nenhum outro idioma.",
           responseMimeType: "application/json",
           responseSchema: verseSuggestionsSchema,
+          temperature: 1.0, // Reduced for stability
         },
       });
 
-      const jsonString = cleanJsonString(response.text);
-      const parsed = JSON.parse(jsonString);
-      
-      if (parsed.verses && Array.isArray(parsed.verses)) {
-        return parsed.verses;
-      } else {
-        throw new Error("Invalid verse suggestions structure received from API.");
+      const jsonString = cleanJsonString(response.text || "");
+      try {
+          const parsed = JSON.parse(jsonString);
+          if (parsed.verses && Array.isArray(parsed.verses)) {
+              return parsed.verses;
+          } else {
+              throw new Error("Invalid verse suggestions structure received from API.");
+          }
+      } catch (parseError) {
+           console.error("JSON Parse Error:", jsonString, parseError);
+           throw new Error("Falha ao processar as sugestões. Tente novamente.");
       }
     } catch (error) {
       console.error("Error generating verse suggestions:", error);
@@ -289,16 +300,21 @@ export async function generateExplanationForVerse(verseText: string, verseRefere
                     systemInstruction: "Você é um especialista em teologia que explica versículos bíblicos de forma clara e inspiradora. Sempre responda em português do Brasil. Não use nenhum outro idioma.",
                     responseMimeType: "application/json",
                     responseSchema: explanationSchema,
+                    temperature: 1.0,
                 },
             });
             
-            const jsonString = cleanJsonString(response.text);
-            const parsed = JSON.parse(jsonString);
-
-            if (parsed.explanation) {
-                return parsed.explanation;
-            } else {
-                throw new Error("Invalid explanation structure received from API.");
+            const jsonString = cleanJsonString(response.text || "");
+            try {
+                const parsed = JSON.parse(jsonString);
+                if (parsed.explanation) {
+                    return parsed.explanation;
+                } else {
+                    throw new Error("Invalid explanation structure received from API.");
+                }
+            } catch (parseError) {
+                console.error("JSON Parse Error:", jsonString, parseError);
+                throw new Error("Falha ao processar a explicação. Tente novamente.");
             }
         } catch (error) {
             console.error("Error generating explanation:", error);

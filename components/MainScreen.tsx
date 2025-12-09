@@ -134,7 +134,11 @@ const MainScreen: React.FC = () => {
       
       setVerseOfTheDay(finalResult);
       const today = new Date().toISOString().split('T')[0];
-      localStorage.setItem('verseOfTheDay', JSON.stringify({ verse: finalResult, date: today }));
+      try {
+        localStorage.setItem('verseOfTheDay', JSON.stringify({ verse: finalResult, date: today }));
+      } catch (e) {
+        console.warn("Could not save verse of the day to localStorage", e);
+      }
     } catch (err) {
       console.error("Failed to generate Verse of the Day", err);
       
@@ -190,8 +194,11 @@ const MainScreen: React.FC = () => {
   }, [fetchVerseOfTheDay]);
 
   const handleRefreshVerseOfTheDay = () => {
-    // Clear cache to force regeneration
-    localStorage.removeItem('verseOfTheDay');
+    try {
+        localStorage.removeItem('verseOfTheDay');
+    } catch (e) {
+        console.warn("Could not clear localStorage", e);
+    }
     setVerseOfTheDay(null);
     fetchVerseOfTheDay();
   };
