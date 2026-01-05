@@ -78,16 +78,13 @@ const MainScreen: React.FC = () => {
   const [isVerseOfTheDayLoading, setIsVerseOfTheDayLoading] = useState<boolean>(true);
   const [verseOfTheDayError, setVerseOfTheDayError] = useState<string | null>(null);
   
-  // Use a ref to ensure verse of the day is only fetched once per session mount to save quota
   const hasInitialized = useRef(false);
-
 
   useEffect(() => {
     try {
       const storedItems = localStorage.getItem('galleryItems');
       if (storedItems) {
         const parsedItems: VerseResult[] = JSON.parse(storedItems);
-        // Add unique IDs to old items that don't have one for backward compatibility
         const itemsWithIds = parsedItems.map((item, index) => ({
             ...item,
             id: item.id || `${item.verseReference}-${index}-${Date.now()}`
@@ -111,27 +108,15 @@ const MainScreen: React.FC = () => {
     setIsVerseOfTheDayLoading(true);
     setVerseOfTheDayError(null);
     try {
-      // Step 1: Generate Verse text
       const verseSuggestion = await generateRandomVerseSuggestion();
-      
-      // Delay to avoid hitting rate limits instantly
       await new Promise(r => setTimeout(r, 1500));
-
-      // Step 2: Generate Explanation
       const explanation = await generateExplanationForVerse(verseSuggestion.verseText, verseSuggestion.verseReference);
-      
-      // Delay before image generation (heavy operation)
       await new Promise(r => setTimeout(r, 1500));
-
-      // Step 3: Generate Image
-      // Verse of the day uses auto source to prefer AI but fallback if needed
       const imageUrl = await generateImage(
         `${imageStyles[0].prompt} Relacionada ao versículo "${verseSuggestion.verseText}".`,
         'auto' 
       );
-
       const finalResult: VerseResult = { ...verseSuggestion, explanation, imageUrl, id: 'verse-of-the-day' };
-      
       setVerseOfTheDay(finalResult);
       const today = new Date().toISOString().split('T')[0];
       try {
@@ -141,26 +126,20 @@ const MainScreen: React.FC = () => {
       }
     } catch (err) {
       console.error("Failed to generate Verse of the Day", err);
-      
-      // FALLBACK: Try to load any cached verse if the API failed
       try {
          const storedData = localStorage.getItem('verseOfTheDay');
          if (storedData) {
              const { verse } = JSON.parse(storedData);
              setVerseOfTheDay({ ...verse, id: 'verse-of-the-day-cached' });
-             // We continue to show the error message below so the user knows something is up, 
-             // but at least they see the old verse.
          }
       } catch (e) { /* ignore */ }
-
       let errorMessage = "Não foi possível carregar o versículo do dia.";
-      
       if (err instanceof Error) {
         const lowerCaseError = err.message.toLowerCase();
         if (lowerCaseError.includes('api key') || lowerCaseError.includes('permission') || lowerCaseError.includes('403') || lowerCaseError.includes('chave da api') || lowerCaseError.includes('configurada')) {
-            errorMessage = "Erro de Configuração: Chave de API não detectada. 1. Renomeie para 'VITE_API_KEY' no painel. 2. Faça um novo Deploy (Rebuild) do site.";
+            errorMessage = "Erro de Configuração: Chave de API não detectada.";
         } else if (lowerCaseError.includes('quota') || lowerCaseError.includes('429') || lowerCaseError.includes('limit')) {
-            errorMessage = "O limite momentâneo da API foi atingido. Por favor, aguarde alguns instantes e tente novamente.";
+            errorMessage = "O limite momentâneo da API foi atingido. Por favor, aguarde.";
         }
       }
       setVerseOfTheDayError(errorMessage);
@@ -172,7 +151,6 @@ const MainScreen: React.FC = () => {
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
-
     const loadVerseOfTheDay = () => {
         try {
             const storedData = localStorage.getItem('verseOfTheDay');
@@ -203,42 +181,62 @@ const MainScreen: React.FC = () => {
     fetchVerseOfTheDay();
   };
 
+  const handleRegenerateImage = useCallback(async (currentResult: VerseResult) => {
+    try {
+      const selectedStyle = imageStyles.find(s => s.id === selectedStyleId) || imageStyles[0];
+      const newImageUrl = await generateImage(
+        `${selectedStyle.prompt} Relacionada ao versículo "${currentResult.verseText}".`,
+        selectedSource
+      );
+      
+      const updatedResult = { ...currentResult, imageUrl: newImageUrl };
+
+      // Update state if it's the current main result
+      if (result && result.id === currentResult.id) {
+        setResult(updatedResult);
+      }
+      
+      // Update state if it's the verse of the day
+      if (verseOfTheDay && (verseOfTheDay.id === currentResult.id || currentResult.id.includes('verse-of-the-day'))) {
+        setVerseOfTheDay(updatedResult);
+        const today = new Date().toISOString().split('T')[0];
+        localStorage.setItem('verseOfTheDay', JSON.stringify({ verse: updatedResult, date: today }));
+      }
+
+      // Update in gallery
+      setGalleryItems(prev => prev.map(item => item.id === currentResult.id ? updatedResult : item));
+      
+      // If modal open, update it
+      if (selectedGalleryItem && selectedGalleryItem.id === currentResult.id) {
+        setSelectedGalleryItem(updatedResult);
+      }
+
+    } catch (err) {
+      console.error("Failed to regenerate image", err);
+      alert("Não foi possível trocar a imagem no momento. Tente novamente mais tarde.");
+    }
+  }, [selectedStyleId, selectedSource, result, verseOfTheDay, selectedGalleryItem]);
+
   const runSuggestionGeneration = useCallback(async (themeToGenerate: string, bookToFilter?: string, chapterToFilter?: string, verseToFilter?: string) => {
-    // Validate: Must have either a theme OR a book to search
     if (!themeToGenerate.trim() && !bookToFilter?.trim()) {
       setError('Por favor, insira um tema ou especifique um livro da Bíblia.');
       return;
     }
-    
     setCurrentStep('suggesting');
     setError(null);
     setResult(null);
     setVerseSuggestions(null);
     setActiveView('main');
-
     try {
       const suggestions = await generateVerseSuggestions(themeToGenerate, bookToFilter, chapterToFilter, verseToFilter);
       if (suggestions && suggestions.length > 0) {
         setVerseSuggestions(suggestions);
       } else {
-        throw new Error('Não foram encontradas sugestões para este tema com os filtros aplicados.');
+        throw new Error('Não foram encontradas sugestões para este tema.');
       }
     } catch (err) {
       console.error(err);
-      let errorMessage = 'Ocorreu um erro ao buscar sugestões. Por favor, tente novamente.';
-       if (err instanceof Error) {
-        if (err.message.includes('Não foram encontradas sugestões')) {
-          errorMessage = err.message;
-        } else {
-          const lowerCaseError = err.message.toLowerCase();
-          if (lowerCaseError.includes('permission denied') || lowerCaseError.includes('api key') || lowerCaseError.includes('configurada')) {
-            errorMessage = "Erro de Configuração: Chave de API não detectada. 1. Renomeie para 'VITE_API_KEY' no painel. 2. Faça um novo Deploy (Rebuild) do site.";
-          } else if (lowerCaseError.includes('quota') || lowerCaseError.includes('429')) {
-             errorMessage = "Muitas solicitações. Aguarde um momento e tente novamente.";
-          }
-        }
-      }
-      setError(errorMessage);
+      setError('Ocorreu um erro ao buscar sugestões.');
     } finally {
       setCurrentStep('idle');
     }
@@ -249,40 +247,24 @@ const MainScreen: React.FC = () => {
     setError(null);
     setVerseSuggestions(null);
     setResult({ ...verse, explanation: '', imageUrl: '', id: `generating-${Date.now()}` });
-
     try {
-      // Execute sequentially to be safer with quotas
       const explanation = await generateExplanationForVerse(verse.verseText, verse.verseReference);
-      
       const selectedStyle = imageStyles.find(s => s.id === selectedStyleId) || imageStyles[0];
-      
       const imageUrl = await generateImage(
         `${selectedStyle.prompt} Relacionada ao versículo "${verse.verseText}".`,
-        selectedSource // Pass the selected source (auto, pexels, pixabay)
+        selectedSource
       );
-
       const finalResult: VerseResult = { 
         ...verse, 
         explanation, 
         imageUrl, 
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
       };
-      
       setResult(finalResult);
       setGalleryItems(prevItems => [finalResult, ...prevItems]);
-
     } catch (err) {
       console.error(err);
-      let errorMessage = 'Ocorreu um erro ao gerar o conteúdo. Por favor, tente novamente.';
-      if (err instanceof Error) {
-        const lowerCaseError = err.message.toLowerCase();
-        if (lowerCaseError.includes('permission denied') || lowerCaseError.includes('api key') || lowerCaseError.includes('configurada')) {
-           errorMessage = "Erro de Configuração: Chave de API não detectada. 1. Renomeie para 'VITE_API_KEY' no painel. 2. Faça um novo Deploy (Rebuild) do site.";
-        } else if (lowerCaseError.includes('quota') || lowerCaseError.includes('429')) {
-           errorMessage = "Muitas solicitações. Aguarde um momento e tente novamente.";
-        }
-      }
-      setError(errorMessage);
+      setError('Ocorreu um erro ao gerar o conteúdo.');
       setResult(null);
     } finally {
       setCurrentStep('idle');
@@ -310,7 +292,7 @@ const MainScreen: React.FC = () => {
   };
 
   const handleDeleteItem = (idToDelete: string) => {
-    if (window.confirm("Tem certeza de que deseja excluir esta inspiração da sua galeria?")) {
+    if (window.confirm("Tem certeza de que deseja excluir?")) {
         setGalleryItems(prevItems => prevItems.filter(item => item.id !== idToDelete));
         setSelectedGalleryItem(null);
     }
@@ -336,20 +318,15 @@ const MainScreen: React.FC = () => {
             </button>
          </div>
         )}
-        {/* Show cached verse even if there is an error (fallback), or if successful */}
         {verseOfTheDay && !isVerseOfTheDayLoading && (
           <div className="animate-fade-in relative group">
             <div className="flex items-center justify-center gap-2 mb-4">
                 <h2 className="text-2xl font-bold font-dancing-script">Versículo do Dia</h2>
-                <button 
-                    onClick={handleRefreshVerseOfTheDay} 
-                    className="p-1.5 rounded-full text-gray-400 hover:text-teal-300 hover:bg-gray-800 transition-colors"
-                    title="Gerar novo versículo"
-                >
+                <button onClick={handleRefreshVerseOfTheDay} className="p-1.5 rounded-full text-gray-400 hover:text-teal-300 hover:bg-gray-800 transition-colors">
                     <RefreshIcon />
                 </button>
             </div>
-            <ResultCard result={verseOfTheDay} />
+            <ResultCard result={verseOfTheDay} onRegenerateImage={handleRegenerateImage} />
           </div>
         )}
       </div>
@@ -390,7 +367,6 @@ const MainScreen: React.FC = () => {
             placeholder="Digite um tema..."
             className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
             disabled={currentStep !== 'idle'}
-            onKeyUp={(e) => e.key === 'Enter' && handleGenerate()}
           />
           <button
             onClick={handleGenerate}
@@ -407,11 +383,9 @@ const MainScreen: React.FC = () => {
         </div>
 
         <div className="mt-4 border-t border-gray-800 pt-4">
-          <p className="text-sm text-gray-500 mb-3 font-semibold">Refine sua busca (ou busque por passagem):</p>
+          <p className="text-sm text-gray-500 mb-3 font-semibold">Refine seu estilo:</p>
           
-          {/* Image Controls: Style and Source */}
           <div className="mb-4 space-y-3">
-             {/* Style Selector */}
              <div>
                <p className="text-xs text-gray-500 mb-2">Estilo da Imagem:</p>
                <div className="flex flex-wrap gap-2">
@@ -431,15 +405,13 @@ const MainScreen: React.FC = () => {
                   ))}
                </div>
              </div>
-
-             {/* Image Source Selector - NEW FEATURE */}
              <div>
                <p className="text-xs text-gray-500 mb-2">Fonte da Imagem:</p>
                <div className="flex flex-wrap gap-2">
                   {[
-                    { id: 'auto', label: 'Automático (IA + Backup)' },
-                    { id: 'pexels', label: 'Pexels (Fotos)' },
-                    { id: 'pixabay', label: 'Pixabay (Fotos)' }
+                    { id: 'auto', label: 'Automático' },
+                    { id: 'pexels', label: 'Pexels' },
+                    { id: 'pixabay', label: 'Pixabay' }
                   ].map((source) => (
                      <button
                         key={source.id}
@@ -459,32 +431,9 @@ const MainScreen: React.FC = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                  type="text"
-                  value={book}
-                  onChange={(e) => setBook(e.target.value)}
-                  placeholder="Livro (ex: Salmos)"
-                  className="flex-[2] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  disabled={currentStep !== 'idle'}
-              />
-              <input
-                  type="number"
-                  value={chapter}
-                  onChange={(e) => setChapter(e.target.value)}
-                  placeholder="Cap."
-                  className="flex-1 min-w-[80px] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  disabled={currentStep !== 'idle'}
-                  min="1"
-              />
-               <input
-                  type="number"
-                  value={verseNumber}
-                  onChange={(e) => setVerseNumber(e.target.value)}
-                  placeholder="Vers."
-                  className="flex-1 min-w-[80px] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  disabled={currentStep !== 'idle'}
-                  min="1"
-              />
+              <input type="text" value={book} onChange={(e) => setBook(e.target.value)} placeholder="Livro" className="flex-[2] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-400" disabled={currentStep !== 'idle'} />
+              <input type="number" value={chapter} onChange={(e) => setChapter(e.target.value)} placeholder="Cap." className="flex-1 min-w-[80px] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-400" disabled={currentStep !== 'idle'} />
+              <input type="number" value={verseNumber} onChange={(e) => setVerseNumber(e.target.value)} placeholder="Vers." className="flex-1 min-w-[80px] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-teal-400" disabled={currentStep !== 'idle'} />
           </div>
         </div>
       </div>
@@ -498,13 +447,11 @@ const MainScreen: React.FC = () => {
                   <p className="mt-4 text-gray-300">Buscando versículos...</p>
               </div>
           )}
-          
           {verseSuggestions && currentStep === 'idle' && (
               <VerseSuggestionsComponent suggestions={verseSuggestions} onSelect={runFinalGeneration} theme={theme || book} />
           )}
-
           {result && (
-              <ResultCard result={result} />
+              <ResultCard result={result} onRegenerateImage={handleRegenerateImage} />
           )}
       </div>
     </>
@@ -524,12 +471,9 @@ const MainScreen: React.FC = () => {
       </main>
 
       {selectedGalleryItem && (
-        <div 
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setSelectedGalleryItem(null)}
-        >
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedGalleryItem(null)}>
           <div onClick={(e) => e.stopPropagation()}>
-            <ResultCard result={selectedGalleryItem} onClose={() => setSelectedGalleryItem(null)} onDelete={handleDeleteItem} />
+            <ResultCard result={selectedGalleryItem} onClose={() => setSelectedGalleryItem(null)} onDelete={handleDeleteItem} onRegenerateImage={handleRegenerateImage} />
           </div>
         </div>
       )}

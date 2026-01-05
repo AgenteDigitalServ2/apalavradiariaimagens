@@ -7,12 +7,14 @@ interface ResultCardProps {
   result: VerseResult;
   onClose?: () => void;
   onDelete?: (id: string) => void;
+  onRegenerateImage?: (result: VerseResult) => Promise<void>;
 }
 
-const ResultCard: React.FC<ResultCardProps> = ({ result, onClose, onDelete }) => {
+const ResultCard: React.FC<ResultCardProps> = ({ result, onClose, onDelete, onRegenerateImage }) => {
   const { verseText, verseReference, explanation, imageUrl, id } = result;
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   useEffect(() => {
     setIsImageLoaded(false);
@@ -21,6 +23,17 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onClose, onDelete }) =>
   const handleShare = () => {
     if (!imageUrl) return;
     shareVerse(result, setIsSharing);
+  };
+
+  const handleRegenerate = async () => {
+    if (onRegenerateImage) {
+      setIsRegenerating(true);
+      try {
+        await onRegenerateImage(result);
+      } finally {
+        setIsRegenerating(false);
+      }
+    }
   };
   
   return (
@@ -50,7 +63,7 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onClose, onDelete }) =>
 
       {/* Container da Imagem + Texto Sobreposto */}
       <div className="relative aspect-[9/16] bg-gray-800">
-        {imageUrl ? (
+        {(imageUrl && !isRegenerating) ? (
           <>
             <img 
               src={imageUrl} 
@@ -74,7 +87,7 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onClose, onDelete }) =>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
             <div className="border-gray-500 h-8 w-8 animate-spin rounded-full border-4 border-t-teal-400" />
-            <p className="text-gray-400 mt-3">Gerando imagem...</p>
+            <p className="text-gray-400 mt-3">{isRegenerating ? 'Trocando imagem...' : 'Gerando imagem...'}</p>
           </div>
         )}
       </div>
@@ -85,23 +98,34 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onClose, onDelete }) =>
           {explanation}
         </p>
         
-        <div className="flex justify-center">
+        <div className="grid grid-cols-2 gap-3">
+          <button 
+            onClick={handleRegenerate}
+            disabled={!isImageLoaded || isSharing || isRegenerating || !onRegenerateImage}
+            className="bg-gray-800 text-teal-400 font-bold py-3 px-2 rounded-full shadow-lg hover:bg-gray-700 transition-all duration-300 flex items-center justify-center gap-2 disabled:bg-gray-900 disabled:text-gray-600 disabled:cursor-not-allowed border border-teal-900/50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${isRegenerating ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+            <span className="text-xs sm:text-sm">Trocar Imagem</span>
+          </button>
+
           <button 
             onClick={handleShare}
-            disabled={!isImageLoaded || isSharing}
-            className="bg-white text-black font-bold py-3 px-8 rounded-full shadow-lg hover:bg-teal-400 transition-all duration-300 flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed w-full sm:w-auto transform hover:-translate-y-1"
+            disabled={!isImageLoaded || isSharing || isRegenerating}
+            className="bg-white text-black font-bold py-3 px-2 rounded-full shadow-lg hover:bg-teal-400 transition-all duration-300 flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transform hover:-translate-y-1"
           >
             {isSharing ? (
                 <>
                     <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    <span>Criando Imagem...</span>
+                    <span className="text-xs sm:text-sm">Criando...</span>
                 </>
             ) : (
                 <>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
                     </svg>
-                    <span>Compartilhar Imagem</span>
+                    <span className="text-xs sm:text-sm">Compartilhar</span>
                 </>
             )}
           </button>

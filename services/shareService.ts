@@ -2,7 +2,7 @@
 import { VerseResult } from '../types';
 
 const createShareableImage = (result: VerseResult): Promise<Blob> => {
-    const { verseText, verseReference, imageUrl } = result;
+    const { verseText, verseReference, explanation, imageUrl } = result;
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -13,23 +13,19 @@ const createShareableImage = (result: VerseResult): Promise<Blob> => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        // --- Setup Canvas Size (Same as Image) ---
+        // --- Setup Canvas Size (Maintain standard social aspect) ---
+        // Let's force a slightly higher resolution for clarity if needed, but original img size is usually fine
         canvas.width = img.width;
         canvas.height = img.height;
 
         // --- Draw Image ---
         ctx.drawImage(img, 0, 0);
 
-        // --- Draw Overlay (Darkening) ---
-        // Adiciona um escurecimento para garantir que o texto branco apareça
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        // --- Draw Overlay (Darkening for readability) ---
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // --- Text Configuration ---
-        const PADDING = img.width * 0.1; // 10% padding
-        const maxWidth = img.width - (PADDING * 2);
-        
-        // Helper function to wrap text
+        // --- Helper function to wrap text ---
         const getLines = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number) => {
             const words = text.split(' ');
             const lines: string[] = [];
@@ -48,63 +44,81 @@ const createShareableImage = (result: VerseResult): Promise<Blob> => {
             return lines;
         }
 
-        // --- Draw Verse Text (Centered) ---
-        // Usar uma fonte cursiva/artística para o versículo
-        // Calculamos um tamanho de fonte dinâmico baseado na largura da imagem
-        const verseFontSize = Math.max(40, Math.round(img.width / 18));
-        const verseLineHeight = verseFontSize * 1.4;
+        // --- Configuration ---
+        const PADDING = canvas.width * 0.1;
+        const CONTENT_WIDTH = canvas.width - (PADDING * 2);
         
+        // --- Verse Style ---
+        const verseFontSize = Math.max(36, Math.round(canvas.width / 18));
+        const verseLineHeight = verseFontSize * 1.3;
         ctx.font = `normal ${verseFontSize}px 'Dancing Script', cursive`;
         ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        
-        // Shadow for better readability
         ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
         ctx.shadowBlur = 15;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 4;
 
-        const verseLines = getLines(ctx, `"${verseText}"`, maxWidth);
+        const verseLines = getLines(ctx, `"${verseText}"`, CONTENT_WIDTH);
         
-        // Calculate total height of text block to center it vertically
-        const refFontSize = Math.max(24, Math.round(img.width / 35));
-        const refMarginTop = verseLineHeight;
-        const totalTextHeight = (verseLines.length * verseLineHeight) + refMarginTop + refFontSize;
+        // --- Reference Style ---
+        const refFontSize = Math.max(20, Math.round(canvas.width / 35));
         
-        let currentY = (canvas.height - totalTextHeight) / 2 + (verseLineHeight / 2);
+        // --- Explanation Style ---
+        const expFontSize = Math.max(18, Math.round(canvas.width / 45));
+        const expLineHeight = expFontSize * 1.4;
+        ctx.font = `normal ${expFontSize}px 'Montserrat', sans-serif`;
+        const expLines = getLines(ctx, explanation, CONTENT_WIDTH);
 
-        // Draw Verse Lines
+        // --- Layout Calculations ---
+        const verseTotalHeight = verseLines.length * verseLineHeight;
+        const spacing = 40;
+        const totalHeight = verseTotalHeight + spacing + refFontSize + spacing + (expLines.length * expLineHeight);
+        
+        let startY = (canvas.height - totalHeight) / 2 + (verseLineHeight / 2);
+
+        // 1. Draw Verse
+        ctx.font = `normal ${verseFontSize}px 'Dancing Script', cursive`;
         for (const line of verseLines) {
-            ctx.fillText(line, canvas.width / 2, currentY);
-            currentY += verseLineHeight;
+            ctx.fillText(line, canvas.width / 2, startY);
+            startY += verseLineHeight;
         }
 
-        // --- Draw Reference ---
-        currentY += (refMarginTop - verseLineHeight) + 10; // Adjust spacing
+        // 2. Draw Reference
+        startY += spacing / 2;
         ctx.font = `bold ${refFontSize}px 'Montserrat', sans-serif`;
-        // Keep shadow
-        ctx.fillText(`— ${verseReference} —`, canvas.width / 2, currentY);
+        ctx.fillText(`— ${verseReference} —`, canvas.width / 2, startY);
+        startY += spacing;
+
+        // 3. Draw Explanation
+        ctx.font = `italic ${expFontSize}px 'Montserrat', sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowBlur = 5; // Less shadow for smaller text
+        for (const line of expLines) {
+            ctx.fillText(line, canvas.width / 2, startY);
+            startY += expLineHeight;
+        }
 
         // --- Draw Watermark (Bottom) ---
-        const watermarkFontSize = Math.max(20, Math.round(img.width / 40));
+        const watermarkFontSize = Math.max(16, Math.round(canvas.width / 50));
         ctx.font = `normal ${watermarkFontSize}px 'Montserrat', sans-serif`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.shadowBlur = 4;
-        ctx.fillText('A Palavra Diária', canvas.width / 2, canvas.height - (PADDING / 2));
+        ctx.fillText('A Palavra Diária', canvas.width / 2, canvas.height - (PADDING / 1.5));
 
         // --- Convert to Blob ---
         canvas.toBlob((blob) => {
           if (blob) {
             resolve(blob);
           } else {
-            reject(new Error('A conversão de Canvas para Blob falhou.'));
+            reject(new Error('Falha na geração do arquivo.'));
           }
-        }, 'image/jpeg', 0.95);
+        }, 'image/jpeg', 0.92);
       };
       
       img.onerror = () => {
-        reject(new Error('Falha ao carregar a imagem para compartilhamento.'));
+        reject(new Error('Erro ao carregar imagem.'));
       };
       img.src = imageUrl;
     });
@@ -129,17 +143,14 @@ export const shareVerse = async (result: VerseResult, setSharing: (isSharing: bo
                 text: shareText
             });
         } else {
-             // Fallback for desktop/unsupported browsers: Download logic could go here, 
-             // but navigator.share is standard on mobile.
-             // We can use a download link fallback if needed, but for now simple share.
              if (navigator.share) {
                  await navigator.share({ title, text: shareText });
              } else {
-                alert("Seu navegador não suporta compartilhamento direto. Tente salvar a imagem manualmente.");
+                alert("Navegador incompatível com compartilhamento direto. Tente salvar a imagem.");
              }
         }
     } catch (error) {
-        console.error("Falha no compartilhamento:", error);
+        console.error("Erro ao compartilhar:", error);
     } finally {
         setSharing(false);
     }
