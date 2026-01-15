@@ -94,7 +94,7 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onClose, onDelete, onRe
 
       {/* Área de Explicação e Ações (Abaixo da imagem) */}
       <div className="p-6 bg-gray-900 border-t border-gray-800">
-        <p className="text-gray-300 mb-6 text-sm leading-relaxed text-justify border-l-2 border-teal-500 pl-4">
+        <p className="text-gray-200 mb-6 text-base sm:text-lg leading-relaxed text-justify border-l-4 border-teal-500 pl-4">
           {explanation}
         </p>
         

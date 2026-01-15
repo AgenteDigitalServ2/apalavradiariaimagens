@@ -7,6 +7,7 @@ import ResultCard from './ResultCard';
 import Spinner from './Spinner';
 import BottomNav from './BottomNav';
 import GalleryScreen from './GalleryScreen';
+import DownloadScreen from './DownloadScreen';
 import VerseSuggestionsComponent from './VerseSuggestions';
 
 const predefinedThemes = ['Fé', 'Esperança', 'Amor', 'Gratidão', 'Paz', 'Força'];
@@ -15,32 +16,32 @@ const imageStyles = [
   {
     id: 'cinematic',
     label: 'Cinematográfico',
-    prompt: 'Uma imagem artística cristã cinematográfica, com alto realismo em 8k, etérea e inspiradora. O estilo deve apresentar iluminação dramática, profundidade de campo rasa para um fundo suave. Deve ser luminosa e esperançosa.'
+    prompt: 'Uma imagem artística cristã cinematográfica, com alto realismo em 8k, etérea e inspiradora. Estilo com iluminação dramática e profundidade de campo. SEM PESSOAS, SEM FIGURAS HUMANAS, SEM ROSTOS. Foque em elementos da natureza, luz divina e paisagens.'
   },
   {
     id: 'minimalist',
     label: 'Minimalista',
-    prompt: 'Uma ilustração minimalista e elegante, com design limpo, traços simples e geométricos. Cores suaves e neutras, muito espaço negativo, composição serena e simbólica. Estilo flat moderno, sem excesso de detalhes.'
+    prompt: 'Uma ilustração minimalista e elegante, com design limpo e traços geométricos. Cores suaves, muito espaço negativo. SEM PESSOAS, SEM FIGURAS HUMANAS. Apenas simbolismos abstratos e natureza.'
   },
   {
     id: 'watercolor',
     label: 'Aquarela',
-    prompt: 'Uma pintura em aquarela suave e delicada, com cores translúcidas e fluidas. Textura de papel visível, estilo artístico, manchas de tinta sutis, atmosfera sonhadora, etérea e feita à mão.'
+    prompt: 'Uma pintura em aquarela suave e delicada. Estilo artístico com manchas de tinta sutis. SEM PESSOAS, SEM FIGURAS HUMANAS. Paisagens naturais e elementos simbólicos.'
   },
   {
     id: 'photorealism',
     label: 'Fotorrealismo',
-    prompt: 'Uma imagem fotorrealista de ultra-alta definição com texturas perfeitas e detalhes meticulosos. Iluminação natural impressionante, parecendo uma captura exata da realidade em 8k, trazendo uma sensação de admiração e tangibilidade.'
+    prompt: 'Uma imagem fotorrealista de ultra-alta definição com texturas perfeitas. Iluminação natural impressionante. SEM PESSOAS, SEM FIGURAS HUMANAS, SEM ROSTOS. Apenas natureza pura e cenários magníficos.'
   },
   {
     id: 'photography',
     label: 'Fotografia',
-    prompt: 'Uma fotografia profissional premiada, capturada com lente de alta qualidade (estilo DSLR). Iluminação natural sublime, composição perfeita, profundidade de campo realista (bokeh), parecendo um momento real capturado no tempo.'
+    prompt: 'Uma fotografia profissional premiada, iluminação natural sublime. SEM PESSOAS, SEM NINGUÉM. Paisagens naturais, céus, montanhas ou detalhes da criação.'
   },
   {
     id: 'realistic-digital',
     label: 'Ilustração Realista',
-    prompt: 'Uma ilustração digital realista e polida, estilo concept art de alta qualidade. Renderização detalhada, luz e sombra volumétricas, acabamento impecável, cores ricas e harmoniosas, evocando serenidade e beleza.'
+    prompt: 'Uma ilustração digital realista e polida, estilo concept art. Renderização detalhada. SEM PESSOAS, SEM FIGURAS HUMANAS. Foco em arquitetura sagrada, natureza ou simbolismo etéreo.'
   }
 ];
 
@@ -70,7 +71,7 @@ const MainScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VerseResult | null>(null);
   const [galleryItems, setGalleryItems] = useState<VerseResult[]>([]);
-  const [activeView, setActiveView] = useState<'main' | 'gallery'>('main');
+  const [activeView, setActiveView] = useState<'main' | 'gallery' | 'download'>('main');
   const [selectedGalleryItem, setSelectedGalleryItem] = useState<VerseResult | null>(null);
   const [verseSuggestions, setVerseSuggestions] = useState<VerseSuggestion[] | null>(null);
 
@@ -113,7 +114,7 @@ const MainScreen: React.FC = () => {
       const explanation = await generateExplanationForVerse(verseSuggestion.verseText, verseSuggestion.verseReference);
       await new Promise(r => setTimeout(r, 1500));
       const imageUrl = await generateImage(
-        `${imageStyles[0].prompt} Relacionada ao versículo "${verseSuggestion.verseText}".`,
+        `${imageStyles[0].prompt} Relacionada ao tema de paz e ao versículo "${verseSuggestion.verseText}". ABSOLUTAMENTE SEM PESSOAS.`,
         'auto' 
       );
       const finalResult: VerseResult = { ...verseSuggestion, explanation, imageUrl, id: 'verse-of-the-day' };
@@ -185,28 +186,24 @@ const MainScreen: React.FC = () => {
     try {
       const selectedStyle = imageStyles.find(s => s.id === selectedStyleId) || imageStyles[0];
       const newImageUrl = await generateImage(
-        `${selectedStyle.prompt} Relacionada ao versículo "${currentResult.verseText}".`,
+        `${selectedStyle.prompt} Relacionada ao versículo "${currentResult.verseText}". ABSOLUTAMENTE SEM PESSOAS NA IMAGEM.`,
         selectedSource
       );
       
       const updatedResult = { ...currentResult, imageUrl: newImageUrl };
 
-      // Update state if it's the current main result
       if (result && result.id === currentResult.id) {
         setResult(updatedResult);
       }
       
-      // Update state if it's the verse of the day
       if (verseOfTheDay && (verseOfTheDay.id === currentResult.id || currentResult.id.includes('verse-of-the-day'))) {
         setVerseOfTheDay(updatedResult);
         const today = new Date().toISOString().split('T')[0];
         localStorage.setItem('verseOfTheDay', JSON.stringify({ verse: updatedResult, date: today }));
       }
 
-      // Update in gallery
       setGalleryItems(prev => prev.map(item => item.id === currentResult.id ? updatedResult : item));
       
-      // If modal open, update it
       if (selectedGalleryItem && selectedGalleryItem.id === currentResult.id) {
         setSelectedGalleryItem(updatedResult);
       }
@@ -251,7 +248,7 @@ const MainScreen: React.FC = () => {
       const explanation = await generateExplanationForVerse(verse.verseText, verse.verseReference);
       const selectedStyle = imageStyles.find(s => s.id === selectedStyleId) || imageStyles[0];
       const imageUrl = await generateImage(
-        `${selectedStyle.prompt} Relacionada ao versículo "${verse.verseText}".`,
+        `${selectedStyle.prompt} Relacionada ao versículo "${verse.verseText}". ABSOLUTAMENTE SEM PESSOAS OU ROSTOS.`,
         selectedSource
       );
       const finalResult: VerseResult = { 
@@ -457,6 +454,17 @@ const MainScreen: React.FC = () => {
     </>
   );
 
+  const renderContent = () => {
+    switch (activeView) {
+      case 'gallery':
+        return <GalleryScreen items={galleryItems} onSelectItem={setSelectedGalleryItem} />;
+      case 'download':
+        return <DownloadScreen />;
+      default:
+        return renderMainContent();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col items-center p-4 sm:p-6 lg:p-8 pb-32">
       <header className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between mb-8">
@@ -467,7 +475,7 @@ const MainScreen: React.FC = () => {
       </header>
       
       <main className="w-full max-w-xl flex-grow flex flex-col items-center">
-        {activeView === 'main' ? renderMainContent() : <GalleryScreen items={galleryItems} onSelectItem={setSelectedGalleryItem} />}
+        {renderContent()}
       </main>
 
       {selectedGalleryItem && (

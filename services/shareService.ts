@@ -13,16 +13,37 @@ const createShareableImage = (result: VerseResult): Promise<Blob> => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        // --- Setup Canvas Size (Maintain standard social aspect) ---
-        // Let's force a slightly higher resolution for clarity if needed, but original img size is usually fine
-        canvas.width = img.width;
-        canvas.height = img.height;
+        // --- Force 9:16 Aspect Ratio (Standard Stories/Reels) ---
+        // We use the image height as the base and calculate width for 9:16
+        const targetHeight = img.height;
+        const targetWidth = (targetHeight * 9) / 16;
 
-        // --- Draw Image ---
-        ctx.drawImage(img, 0, 0);
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        // --- Draw Image with "Cover" logic (Centering and Scaling) ---
+        const imgAspect = img.width / img.height;
+        const canvasAspect = canvas.width / canvas.height;
+        let drawWidth, drawHeight, offsetX, offsetY;
+
+        if (imgAspect > canvasAspect) {
+          // Image is wider than 9:16
+          drawHeight = canvas.height;
+          drawWidth = img.width * (canvas.height / img.height);
+          offsetX = (canvas.width - drawWidth) / 2;
+          offsetY = 0;
+        } else {
+          // Image is narrower than 9:16 (rare for our gen but handles stock)
+          drawWidth = canvas.width;
+          drawHeight = img.height * (canvas.width / img.width);
+          offsetX = 0;
+          offsetY = (canvas.height - drawHeight) / 2;
+        }
+
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
 
         // --- Draw Overlay (Darkening for readability) ---
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'; 
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // --- Helper function to wrap text ---
@@ -45,11 +66,11 @@ const createShareableImage = (result: VerseResult): Promise<Blob> => {
         }
 
         // --- Configuration ---
-        const PADDING = canvas.width * 0.1;
+        const PADDING = canvas.width * 0.12; // Slightly more padding for narrow 9:16
         const CONTENT_WIDTH = canvas.width - (PADDING * 2);
         
         // --- Verse Style ---
-        const verseFontSize = Math.max(36, Math.round(canvas.width / 18));
+        const verseFontSize = Math.max(40, Math.round(canvas.width / 14));
         const verseLineHeight = verseFontSize * 1.3;
         ctx.font = `normal ${verseFontSize}px 'Dancing Script', cursive`;
         ctx.fillStyle = '#FFFFFF';
@@ -63,23 +84,24 @@ const createShareableImage = (result: VerseResult): Promise<Blob> => {
         const verseLines = getLines(ctx, `"${verseText}"`, CONTENT_WIDTH);
         
         // --- Reference Style ---
-        const refFontSize = Math.max(20, Math.round(canvas.width / 35));
+        const refFontSize = Math.max(24, Math.round(canvas.width / 25));
         
         // --- Explanation Style ---
-        const expFontSize = Math.max(18, Math.round(canvas.width / 45));
-        const expLineHeight = expFontSize * 1.4;
+        const expFontSize = Math.max(22, Math.round(canvas.width / 32));
+        const expLineHeight = expFontSize * 1.5;
         ctx.font = `normal ${expFontSize}px 'Montserrat', sans-serif`;
         const expLines = getLines(ctx, explanation, CONTENT_WIDTH);
 
         // --- Layout Calculations ---
         const verseTotalHeight = verseLines.length * verseLineHeight;
-        const spacing = 40;
+        const spacing = canvas.height * 0.04; // Responsive spacing
         const totalHeight = verseTotalHeight + spacing + refFontSize + spacing + (expLines.length * expLineHeight);
         
         let startY = (canvas.height - totalHeight) / 2 + (verseLineHeight / 2);
 
         // 1. Draw Verse
         ctx.font = `normal ${verseFontSize}px 'Dancing Script', cursive`;
+        ctx.fillStyle = '#FFFFFF';
         for (const line of verseLines) {
             ctx.fillText(line, canvas.width / 2, startY);
             startY += verseLineHeight;
@@ -88,24 +110,25 @@ const createShareableImage = (result: VerseResult): Promise<Blob> => {
         // 2. Draw Reference
         startY += spacing / 2;
         ctx.font = `bold ${refFontSize}px 'Montserrat', sans-serif`;
+        ctx.fillStyle = '#fde047'; // yellow-300
         ctx.fillText(`— ${verseReference} —`, canvas.width / 2, startY);
         startY += spacing;
 
         // 3. Draw Explanation
-        ctx.font = `italic ${expFontSize}px 'Montserrat', sans-serif`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.shadowBlur = 5; // Less shadow for smaller text
+        ctx.font = `normal ${expFontSize}px 'Montserrat', sans-serif`;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowBlur = 8;
         for (const line of expLines) {
             ctx.fillText(line, canvas.width / 2, startY);
             startY += expLineHeight;
         }
 
         // --- Draw Watermark (Bottom) ---
-        const watermarkFontSize = Math.max(16, Math.round(canvas.width / 50));
-        ctx.font = `normal ${watermarkFontSize}px 'Montserrat', sans-serif`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        const watermarkFontSize = Math.max(18, Math.round(canvas.width / 40));
+        ctx.font = `bold ${watermarkFontSize}px 'Montserrat', sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.shadowBlur = 4;
-        ctx.fillText('A Palavra Diária', canvas.width / 2, canvas.height - (PADDING / 1.5));
+        ctx.fillText('A Palavra Diária', canvas.width / 2, canvas.height - (canvas.height * 0.06));
 
         // --- Convert to Blob ---
         canvas.toBlob((blob) => {
@@ -114,7 +137,7 @@ const createShareableImage = (result: VerseResult): Promise<Blob> => {
           } else {
             reject(new Error('Falha na geração do arquivo.'));
           }
-        }, 'image/jpeg', 0.92);
+        }, 'image/jpeg', 0.95);
       };
       
       img.onerror = () => {

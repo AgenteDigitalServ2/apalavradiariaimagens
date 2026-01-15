@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 const HomeIcon = ({ className }: { className?: string }) => (
@@ -14,9 +15,15 @@ const GalleryIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
+const DownloadIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+    </svg>
+);
+
 interface BottomNavProps {
-    activeView: 'main' | 'gallery';
-    setActiveView: (view: 'main' | 'gallery') => void;
+    activeView: 'main' | 'gallery' | 'download';
+    setActiveView: (view: 'main' | 'gallery' | 'download') => void;
     galleryItemCount: number;
 }
 
@@ -36,9 +43,9 @@ const NavButton: React.FC<{
             aria-label={label}
         >
             {children}
-            <span className="text-xs mt-1">{label}</span>
+            <span className="text-[10px] sm:text-xs mt-1">{label}</span>
             {badgeCount > 0 && (
-                <span className="absolute top-0 right-1/2 -mr-5 px-1.5 py-0.5 text-xs font-bold text-black bg-yellow-300 rounded-full">
+                <span className="absolute top-0 right-1/2 -mr-5 px-1.5 py-0.5 text-[10px] font-bold text-black bg-yellow-300 rounded-full">
                     {badgeCount}
                 </span>
             )}
@@ -49,7 +56,7 @@ const NavButton: React.FC<{
 
 const BottomNav: React.FC<BottomNavProps> = ({ activeView, setActiveView, galleryItemCount }) => {
     return (
-        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-gray-900/80 border-t border-gray-700 backdrop-blur-sm z-50">
+        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-gray-900/90 border-t border-gray-700 backdrop-blur-md z-50">
             <div className="max-w-xl mx-auto h-full flex justify-around">
                 <NavButton
                     isActive={activeView === 'main'}
@@ -65,6 +72,13 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeView, setActiveView, galler
                     badgeCount={galleryItemCount}
                 >
                     <GalleryIcon className="w-6 h-6" />
+                </NavButton>
+                <NavButton
+                    isActive={activeView === 'download'}
+                    onClick={() => setActiveView('download')}
+                    label="Instalar"
+                >
+                    <DownloadIcon className="w-6 h-6" />
                 </NavButton>
             </div>
         </nav>
